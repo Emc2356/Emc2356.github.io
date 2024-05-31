@@ -1,0 +1,508 @@
+<!--
+to quick jump in the documents search these things:
+navigation_bar // for the sidebar
+html_index // for the list to jump in specific parts of the page
+jit_compiler  // for the jit compiler explanation
+ufunc_compiler  // for the explanation of vectorize
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>numba</title>
+
+    <link rel="stylesheet" href="../css/style.css">
+    <link href="../../dependencies/prismjs/prism.css" rel="stylesheet"/>
+</head>
+<body>
+
+    <!-- navigation_bar -->
+    <ul id="top-nav">
+        <li id="home"><a href="../../index.html">Home</a></li>
+        <li id="numba"><a href="./numba.html">Numba</a></li>
+        <li id="numpy"><a href="./numpy.html">Numpy</a></li>
+        <li id="about"><a href="./about.html">About</a></li>
+    </ul>
+
+<!-- the class is used to offset the text -->
+
+<div class="main-text">
+
+<h1>numba</h1>
+<p>what is numba?</p>
+<p>numba is a tool that turns your python code into fast machine code.<br />
+numba is also numpy aware, so it is a perfect match for data science.  </p>
+
+    <!-- html_index -->
+<ol>
+    <li><a href="#jit">jit compiler</a></li>
+    <li><a href="#vectorize">ufunc compiler</a></li>
+    <li><a href="#MandelbrotSet">mandelbrot set example</a></li>
+</ol>
+
+    <!-- jit_compiler -->
+<h1><a id="jit">Jit compiler</a></h1>
+<p>let's start with a simple example of the numba jit compiler.  </p>
+
+<pre class="language-python"><code>
+def python_sum_range(n):
+    total = 0
+    for i in range(n):
+        total += i
+    return total
+</code></pre>
+
+<p>the above code when run with a value of 500 it takes ~60.4 µs</p>
+
+<pre class="language-python"><code>
+import numba as nb
+
+
+@nb.jit
+def numba_sum_range(n):
+    total = 0
+    for i in range(n):
+        total += 1
+    return total
+</code></pre>
+
+<p>for the above code the call took about ~2.79ms</p>
+<p>why is it slower than normal python code?</p>
+<p>shouldn't numba turn python code into fast machine code?</p>
+<p>numba is a compiler for python, so it needs to compile the actual code first</p>
+<p>the first time you call any jitted function it may take longer to actually execute the code for the first time because it tries to figure out what teh function does</p>
+<p>now if you run the function again it takes about ~473ns per call</p>
+<p>numba is as simple as decorating your function with numba.jit compiler</p>
+
+<pre class="language-python"><code>
+import numba as nb
+import random
+
+@nb.njit
+def monte_carlo_pi_numba(nsamples):
+    acc = 0
+    for i in range(nsamples):
+        x = random.random()
+        y = random.random()
+        if (x ** 2 + y ** 2) < 1.0:
+            acc += 1
+    return 4.0 * acc / nsamples
+
+def monte_carlo_pi_python(nsamples):
+    acc = 0
+    for i in range(nsamples):
+        x = random.random()
+        y = random.random()
+        if (x ** 2 + y ** 2) < 1.0:
+            acc += 1
+    return 4.0 * acc / nsamples
+</code></pre>
+
+<p>the above example we are estimating the value if pi with monte carlo's method</p>
+<p>with the pure python version and nsamples=5000 it took ~6.58ms per loop</p>
+<p>while the compiled numba version with nsamples=5000 it took ~161µs</p>
+<p>the numba version is ~40 times faster than the pure python version</p>
+
+<p>numba is very powerful, but it has some very specific rules that you have to follow</p>
+
+<pre class="language-python"><code>
+def original_function(input_list):
+    output_list = []
+    for item in input_list:
+        if item % 2 == 0:
+            output_list.append(2)
+        else:
+            output_list.append('1')
+    return output_list
+
+test_list = list(range(10))
+print(original_function(test_list)) # [2, '1', 2, '1', 2, '1', 2, '1', 2, '1']
+</code></pre>
+
+<p>in the above code we are creating a python list and putting 2 if the value is even else 1</p>
+
+
+<pre class="language-python"><code>
+# create a jitted version of the original_function
+jitted_function = nb.jit(original_function)
+</code></pre>
+
+<p>now if you try to run the jitted_function you will get this really long warning message</p>
+
+<pre class="language-python"><code>
+    <ipython-input-6-af244bf1c758>:1: NumbaWarning:
+Compilation is falling back to object mode WITH looplifting enabled because Function "original_function" failed type inference due to: Invalid use of BoundFunction(list.append for list(int64)) with parameters (Literal[str](1))
+ * parameterized
+[1] During: resolving callee type: BoundFunction(list.append for list(int64))
+[2] During: typing of call at <ipython-input-6-af244bf1c758> (7)
+
+
+File "<ipython-input-6-af244bf1c758>", line 7:
+def original_function(input_list):
+    <source elided>
+        else:
+            output_list.append('1')
+            ^
+
+  def original_function(input_list):
+<ipython-input-6-af244bf1c758>:1: NumbaWarning:
+Compilation is falling back to object mode WITHOUT looplifting enabled because Function "original_function" failed type inference due to: cannot determine Numba type of <class 'numba.dispatcher.LiftedLoop'>
+
+File "<ipython-input-6-af244bf1c758>", line 3:
+def original_function(input_list):
+    <source elided>
+    output_list = []
+    for item in input_list:
+    ^
+
+  def original_function(input_list):
+/home/jari/.virtualenvs/cv/lib/python3.7/site-packages/numba/compiler.py:742: NumbaWarning: Function "original_function" was compiled in object mode without forceobj=True, but has lifted loops.
+
+File "<ipython-input-6-af244bf1c758>", line 1:
+def original_function(input_list):
+^
+
+  self.func_ir.loc))
+/home/jari/.virtualenvs/cv/lib/python3.7/site-packages/numba/compiler.py:751: NumbaDeprecationWarning:
+Fall-back from the nopython compilation path to the object mode compilation path has been detected, this is deprecated behaviour.
+
+For more information visit http://numba.pydata.org/numba-doc/latest/reference/deprecation.html#deprecation-of-object-mode-fall-back-behaviour-when-using-jit
+
+File "<ipython-input-6-af244bf1c758>", line 1:
+def original_function(input_list):
+^
+
+  warnings.warn(errors.NumbaDeprecationWarning(msg, self.func_ir.loc))
+<ipython-input-6-af244bf1c758>:1: NumbaWarning:
+Compilation is falling back to object mode WITHOUT looplifting enabled because Function "original_function" failed type inference due to: non-precise type pyobject
+[1] During: typing of argument at <ipython-input-6-af244bf1c758> (3)
+
+File "<ipython-input-6-af244bf1c758>", line 3:
+def original_function(input_list):
+    <source elided>
+    output_list = []
+    for item in input_list:
+    ^
+
+  def original_function(input_list):
+/home/jari/.virtualenvs/cv/lib/python3.7/site-packages/numba/compiler.py:742: NumbaWarning: Function "original_function" was compiled in object mode without forceobj=True.
+
+File "<ipython-input-6-af244bf1c758>", line 3:
+def original_function(input_list):
+    <source elided>
+    output_list = []
+    for item in input_list:
+    ^
+
+  self.func_ir.loc))
+/home/jari/.virtualenvs/cv/lib/python3.7/site-packages/numba/compiler.py:751: NumbaDeprecationWarning:
+Fall-back from the nopython compilation path to the object mode compilation path has been detected, this is deprecated behaviour.
+
+For more information visit http://numba.pydata.org/numba-doc/latest/reference/deprecation.html#deprecation-of-object-mode-fall-back-behaviour-when-using-jit
+
+File "<ipython-input-6-af244bf1c758>", line 3:
+def original_function(input_list):
+    <source elided>
+    output_list = []
+    for item in input_list:
+    ^
+
+  warnings.warn(errors.NumbaDeprecationWarning(msg, self.func_ir.loc))
+</code></pre>
+
+<p>numba can give helpful errors, but they are really hard to read sometimes</p>
+<p>numba has two major modes, object mode and no-object mode</p>
+<p>when using numba your worst enemy is object mode</p>
+<p>object mode is python code so when you try to run your function it runs python code between machine code</p>
+<p>to ensure that numba fails to run when it falls back to object mode we replace nb.jit with nb.jit(nopython=True)</p>
+<p>the numba developers realized that it isn't a good idea to have the nopython has a argument and they provided as with a decorator called njit (nb.njit) that has the nopython mode to True</p>
+
+<p></p>
+<p>now why did that error occurred in our function?</p>
+<p>why is the numba version 2x slower than the python version?</p>
+<p>firstly types in python lists need to be consistent</p>
+<p>when numba sees output_list.append(2) it assumes that output_list is a container that has integers in it</p>
+<p>but it fails when it sees output_list.append('1')</p>
+
+<pre class="language-python"><code>
+import numba as nb
+
+def original_function(input_list):
+    output_list = []
+    for item in input_list:
+        if item % 2 == 0:
+            output_list.append(2)
+        else:
+            output_list.append(1)
+    return output_list
+
+
+jitted_function = nb.njit(original_function)
+</code></pre>
+
+<p>now we still get a warning</p>
+
+<pre class="language-python"><code>
+C:\anaconda3\lib\site-packages\numba\core\ir_utils.py:2139: NumbaPendingDeprecationWarning:
+Encountered the use of a type that is scheduled for deprecation: type 'reflected list' found for argument 'input_list' of function 'original_function'.
+
+For more information visit https://numba.pydata.org/numba-doc/latest/reference/deprecation.html#deprecation-of-reflection-for-list-and-set-types
+
+File "<ipython-input-37-390f810355b3>", line 3:
+
+def original_function(input_list):
+^
+
+  warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
+</code></pre>
+
+<p>numba doesn't really like python lists due to the fact that you can put any type in the list</p>
+<p>it is recommended to use numpy arrays with numba</p>
+
+<p>now lets call the jitted_function with first argument as numpy.arange(100), this function is similar to range, but it generates a numpy array in memory</p>
+<p>with the jitted function <code>jitted_function(np.arange(1000))</code> it took ~46.6µs</p>
+<p>and the python version <code>original_function(range(1000))</code> it took ~450µs</p>
+<p>this is a easy 10x speed up with little change to the function</p>
+<p>can we go any further? the answer is yes</p>
+
+<p>we are going to return a numpy array so numba can do pre-allocations to be even faster</p>
+
+<pre class="language-python"><code>
+import numba as nb
+
+def original_function(input_list):
+    output_list = np.zeros_like(input_list)
+    for i in range(len(input_list)):
+        item = input_list[i]
+        if item % 2 == 0:
+            output_list[i] = 2
+        else:
+            output_list[i] = 1
+    return output_list
+
+
+jitted_function = nb.njit(original_function)
+</code></pre>
+
+<p>with the new jitted_function <code>jitted_function(np.arange(1000))</code> it took ~6.94µs</p>
+
+    <!-- ufunc_compiler -->
+<h1 id="vectorize">ufunc compiler</h1>
+<p>numba also has another compiler called numba.vectorize that creates a new numpy ufunc</p>
+<p>the compiled function will act similar to numpy.add numpy.sqrt, etc</p>
+
+<pre class="language-python"><code>
+import numba as nb
+
+@nb.vectorize(nopython=True)
+def func(a, b):
+    return a + b
+</code></pre>
+
+<p>this function now can accept 2 arguments, either 2 value or 2 arrays</p>
+
+<pre class="language-python"><code>
+func(1, 1)  # 2
+
+array = np.arange(6)
+func(array, array)  # array([ 0,  2,  4,  6,  8, 10], dtype=int64)
+
+</code></pre>
+
+<p>ufuncs can accepts either bare values or arrays, numpy arrays are preferred</p>
+
+<p>now why should you use @vectorize instead of @jit with a loop instead?</p>
+<p>numpy ufuncs get things like reduction, accumulation and broadcasting done automatically</p>
+
+<pre class="language-python"><code>
+>>> a = np.arange(12).reshape(3, 4)
+>>> a
+array([[ 0,  1,  2,  3],
+       [ 4,  5,  6,  7],
+       [ 8,  9, 10, 11]])
+>>> func.reduce(a, axis=0)
+array([12, 15, 18, 21])
+>>> func.reduce(a, axis=1)
+array([ 6, 22, 38])
+>>> func.accumulate(a)
+array([[ 0,  1,  2,  3],
+       [ 4,  6,  8, 10],
+       [12, 15, 18, 21]])
+>>> func.accumulate(a, axis=1)
+array([[ 0,  1,  3,  6],
+       [ 4,  9, 15, 22],
+       [ 8, 17, 27, 38]])
+</code></pre>
+
+
+<h1 id="MandelbrotSet">mandelbrot set</h1>
+<p>now with our newly acquired knowledge we will attempt to make a famous fractal, mandelbrot set, in python with numba</p>
+
+<p>firstly we need to define some constants</p>
+
+<pre class="language-python"><code>
+# how many iterations we will do
+PRECISION = 500
+# at what point we consider that the point has span to infinity
+INFINITY = 2
+
+WIDTH = 600
+HEIGHT = int(WIDTH / 1.5)
+
+# constants for the complex plane
+# the real axis (or x axis)
+RE_START = -2
+RE_END = 1
+# "imaginary" or lateral axis (or y axis)
+IM_START = -1
+IM_END = 1
+</code></pre>
+
+<p>now lets start building our actual function</p>
+<p>we will need to make an array and loop over every part of it</p>
+
+
+<pre class="language-python"><code>
+import numpy as np
+import numba as nb
+
+
+@nb.njit  # declare a jit compiled function
+def mandelbrot_set():
+    array = np.zeros((HEIGHT, WIDTH, 3))
+    for x in range(WIDTH):
+        for y in range(HEIGHT):
+            pass
+</code></pre>
+
+<p>now how hit every point in the plain</p>
+<p>but we also need a function to get a point in the complex plane from the current pixel</p>
+
+<pre class="language-python"><code>
+@nb.njit
+def point2D(x, y):
+    return complex(
+            RE_START + (x / WIDTH) * (RE_END - RE_START),
+            IM_START + (y / HEIGHT) * (IM_END - IM_START),
+        )
+</code></pre>
+
+<p>why do we need to decorate the point2D function? can't it be a normal function?</p>
+<p>in jit context you can only call other numba jitted function or function that are supported by numba like numpy functions</p>
+
+<p>now that we have a way to get a point in the complex plane from the index we can get the iterations with the algorithm <i>z</i><sub>n+1</sub> = <i>z</i><sub>n</sub><sup>2</sup><i>+c</i></p>
+
+<pre class="language-python"><code>
+import numpy as np
+import numba as nb
+
+
+@nb.njit
+def get_iterations(c):
+    z = complex(0, 0)
+    for i in range(PRECISION):
+        z = z * z + c  # Zn+1 = Zn^2 + C
+        # te absolute value of a complex numbers is defined as real_component ^ 2 + imaginary_component ^ 2
+        if abs(z) > INFINITY:
+            return i
+    return PRECISION
+
+
+@nb.njit  # declare a jit compiled function
+def mandelbrot_set():
+    array = np.zeros((HEIGHT, WIDTH, 3))
+    for x in range(WIDTH):
+        for y in range(HEIGHT):
+            c = point2D(x, y)
+            m = get_iterations(c)
+</code></pre>
+
+<p>after we have successfully got the iterations before it exited we will use this coloring algorithm</p>
+<!-- javascript highlighting looks better here so shush -->
+<pre class="language-javascript"><code>
+R = int(m + ((m * 20) % 156))
+G = int(100 + ((m * 20) % 156))
+B = int(255)
+</code></pre>
+
+<p>after we added the coloring to the set the code it will look something like this</p>
+
+<pre class="language-python"><code>
+@nb.njit
+def mandelbrot_set():
+    array = np.zeros((HEIGHT, WIDTH, 3))
+    for x in range(WIDTH):
+        for y in range(HEIGHT):
+            c = point2D(x, y)
+            m = get_iterations(c)
+            if m < PRECISION:
+                array[y, x] = (
+                    int(m + ((m * 20) % 156)),
+                    int(100 + ((m * 20) % 156)),
+                    int(255),
+                )
+            else:
+                array[y, x] = (0, 0, 0)
+    return array
+</code></pre>
+
+<p>now to display the output image we will use PIL.Image</p>
+
+<pre class="language-python"><code>
+from PIL import Image
+
+array = mandelbrot_set()
+# we need to turn it into a unsigned int array as this is what the Image.fromarray accepts
+image = Image.fromarray(np.uint8(array), "RGB")
+image.show()
+</code></pre>
+
+<p>after timing how long the compiled function takes it comes out to ~0.528s</p>
+
+<p>but not we can get into parallelism</p>
+
+<pre class="language-python"><code>
+import os
+
+CORES = os.cpu_count()
+
+
+@nb.njit(parallel=True)  # firstly we need to enable the parallel context
+def mandelbrot_set():
+    array = np.zeros((HEIGHT, WIDTH, 3))
+    # nb.prange creates a parallel range in a jit function
+    for start in nb.prange(CORES):  # we start one new task for each core we have
+        # start, stop, step
+        for x in range(start, WIDTH, CORES):
+            for y in range(HEIGHT):
+                c = point2D(x, y)
+                m = get_iterations(c)
+                if m < PRECISION:
+                    array[y, x] = (
+                        int(m + ((m * 20) % 156)),
+                        int(100 + ((m * 20) % 156)),
+                        int(255),
+                    )
+                else:
+                    array[y, x] = (0, 0, 0)
+    return array
+</code></pre>
+
+<p>now with our new function and parallelism it takes about 0.156s for the compiled function to compute</p>
+
+<p>
+    download source <a href="../download/mandelbrot_set.py" download="mandelbrot_set.py">here</a>
+</p>
+
+<a href="../images/mandelbrot-set%20600x400.png">
+    <img src="../images/mandelbrot-set%20600x400.png" alt="mandelbrot-set image">
+</a>
+
+
+</div>
+
+
+    <script src="../../dependencies/prismjs/prism.js"></script>
+</body>
+</html>
